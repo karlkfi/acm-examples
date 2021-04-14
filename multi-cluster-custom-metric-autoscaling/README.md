@@ -1,4 +1,4 @@
-# Multi-Cluster PubSub Consumer
+# Multi-Cluster Custom Metric Autoscaling
 
 This examples demonstrates how to manage a tenant service that autoscales across two clusters using the [Custom Metrics Stackdriver Adapter](https://github.com/GoogleCloudPlatform/k8s-stackdriver/tree/master/custom-metrics-stackdriver-adapter), Anthos Config Management, GitOps, and Kustomize.
 
