@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pubsub-sample
+spec:
+  template:
+    spec:
+      containers:
+      - name: subscriber
+        image: gcr.io/google-samples/pubsub-sample:v1
+      serviceAccountName: pubsub-sample
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pubsub-sample
+  annotations:
+    iam.gke.io/gcp-service-account: pubsub-sample@pubsub-sample-1234.iam.gserviceaccount.com

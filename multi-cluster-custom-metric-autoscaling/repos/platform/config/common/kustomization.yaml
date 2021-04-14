@@ -1,0 +1,8 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- namespaces.yaml
+- custom-metrics-apis.yaml
+- custom-metrics-rbac.yaml
+commonLabels:
+  owner: platform-team

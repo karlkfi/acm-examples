@@ -1,0 +1,224 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: custom-metrics
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: pubsub-sample
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: custom-metrics-stackdriver-adapter
+  namespace: custom-metrics
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: external-metrics-reader
+rules:
+- apiGroups:
+  - external.metrics.k8s.io
+  resources:
+  - '*'
+  verbs:
+  - list
+  - get
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: custom-metrics-auth-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+- kind: ServiceAccount
+  name: custom-metrics-stackdriver-adapter
+  namespace: custom-metrics
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: custom-metrics:system:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+- kind: ServiceAccount
+  name: custom-metrics-stackdriver-adapter
+  namespace: custom-metrics
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: external-metrics-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: external-metrics-reader
+subjects:
+- kind: ServiceAccount
+  name: horizontal-pod-autoscaler
+  namespace: kube-system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: custom-metrics-resource-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+- kind: ServiceAccount
+  name: custom-metrics-stackdriver-adapter
+  namespace: custom-metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    cluster: cluster-east
+    k8s-app: custom-metrics-stackdriver-adapter
+    kubernetes.io/cluster-service: "true"
+    kubernetes.io/name: Adapter
+    owner: platform-team
+    run: custom-metrics-stackdriver-adapter
+  name: custom-metrics-stackdriver-adapter
+  namespace: custom-metrics
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 443
+  selector:
+    cluster: cluster-east
+    k8s-app: custom-metrics-stackdriver-adapter
+    owner: platform-team
+    run: custom-metrics-stackdriver-adapter
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    cluster: cluster-east
+    k8s-app: custom-metrics-stackdriver-adapter
+    owner: platform-team
+    run: custom-metrics-stackdriver-adapter
+  name: custom-metrics-stackdriver-adapter
+  namespace: custom-metrics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      cluster: cluster-east
+      k8s-app: custom-metrics-stackdriver-adapter
+      owner: platform-team
+      run: custom-metrics-stackdriver-adapter
+  template:
+    metadata:
+      labels:
+        cluster: cluster-east
+        k8s-app: custom-metrics-stackdriver-adapter
+        kubernetes.io/cluster-service: "true"
+        owner: platform-team
+        run: custom-metrics-stackdriver-adapter
+    spec:
+      containers:
+      - command:
+        - /adapter
+        - --use-new-resource-model=true
+        image: gcr.io/gke-release/custom-metrics-stackdriver-adapter:v0.12.0-gke.0
+        imagePullPolicy: Always
+        name: pod-custom-metrics-stackdriver-adapter
+        resources:
+          limits:
+            cpu: 250m
+            memory: 200Mi
+          requests:
+            cpu: 250m
+            memory: 200Mi
+      serviceAccountName: custom-metrics-stackdriver-adapter
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: v1beta1.custom.metrics.k8s.io
+spec:
+  group: custom.metrics.k8s.io
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: custom-metrics-stackdriver-adapter
+    namespace: custom-metrics
+  version: v1beta1
+  versionPriority: 100
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: v1beta1.external.metrics.k8s.io
+spec:
+  group: external.metrics.k8s.io
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: custom-metrics-stackdriver-adapter
+    namespace: custom-metrics
+  version: v1beta1
+  versionPriority: 100
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  labels:
+    cluster: cluster-east
+    owner: platform-team
+  name: v1beta2.custom.metrics.k8s.io
+spec:
+  group: custom.metrics.k8s.io
+  groupPriorityMinimum: 100
+  insecureSkipTLSVerify: true
+  service:
+    name: custom-metrics-stackdriver-adapter
+    namespace: custom-metrics
+  version: v1beta2
+  versionPriority: 200

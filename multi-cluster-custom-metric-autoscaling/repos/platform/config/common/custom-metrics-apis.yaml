@@ -1,0 +1,43 @@
+# Custom Metrics APIs using the Stackdriver Adapter 
+# https://github.com/GoogleCloudPlatform/k8s-stackdriver/tree/master/custom-metrics-stackdriver-adapter
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.custom.metrics.k8s.io
+spec:
+  insecureSkipTLSVerify: true
+  group: custom.metrics.k8s.io
+  groupPriorityMinimum: 100
+  versionPriority: 100
+  service:
+    name: custom-metrics-stackdriver-adapter
+    namespace: custom-metrics
+  version: v1beta1
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta2.custom.metrics.k8s.io
+spec:
+  insecureSkipTLSVerify: true
+  group: custom.metrics.k8s.io
+  groupPriorityMinimum: 100
+  versionPriority: 200
+  service:
+    name: custom-metrics-stackdriver-adapter
+    namespace: custom-metrics
+  version: v1beta2
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.external.metrics.k8s.io
+spec:
+  insecureSkipTLSVerify: true
+  group: external.metrics.k8s.io
+  groupPriorityMinimum: 100
+  versionPriority: 100
+  service:
+    name: custom-metrics-stackdriver-adapter
+    namespace: custom-metrics
+  version: v1beta1

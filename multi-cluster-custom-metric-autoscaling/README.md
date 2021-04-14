@@ -1,6 +1,8 @@
-# Multi-Cluster Ingress
+# Multi-Cluster PubSub Consumer
 
-This examples shows how to manage a service with Multi-Cluster Ingress using Anthos Config Management, GitOps, and Kustomize.
+This examples demonstrates how to manage a tenant service that autoscales across two clusters using the [Custom Metrics Stackdriver Adapter](https://github.com/GoogleCloudPlatform/k8s-stackdriver/tree/master/custom-metrics-stackdriver-adapter), Anthos Config Management, GitOps, and Kustomize.
+
+This example also demonstrates how to manage cluster-scoped resources and a shared service that requires elevated permissions.
 
 ## Clusters
 
@@ -11,7 +13,17 @@ This examples shows how to manage a service with Multi-Cluster Ingress using Ant
 
 This example demonstrates one tenant with a workload that span multiple clusters:
 
-- **zoneprinter** - an echo service behind Multi-Cluster Ingress
+- **pubsub-sample** - a pubsub consumer horizontally autoscaling based on topic length using Workload Identity and a seperate tenant project
+
+Following multitenant best practice, the tenant workload runs in its own tenant namespace.
+
+## Admin Workloads
+
+This example demonstrates running a shared service:
+
+- **custom-metrics** - a deployment of the [Custom Metrics Stackdriver Adapter](https://github.com/GoogleCloudPlatform/k8s-stackdriver/tree/master/custom-metrics-stackdriver-adapter) 
+
+Following security best practice, the shared service also runs in its own tenant namespace, but depends on cluster-scoped resources, like APIServices, ClusterRoles, and ClusterRoleBindings.
 
 ## Filesystem Hierarchy
 
@@ -22,7 +34,12 @@ This example demonstrates one tenant with a workload that span multiple clusters
         - `${cluster-name}/`
             - `kustomization.yaml` - cluster-specific overlays
     - `common/`
+        - `namespaces/`
+            - `${namespace}/`
+                - `kustomization.yaml` - cluster-agnostic but namespace-specific overlays
+                - `${name}-${kind}.yaml` - cluster-agnostic but namespace-specific resources
         - `kustomization.yaml` - common overlays
+        - `${name}-${kind}.yaml` - common cluster-scoped resources
         - `namespaces.yaml` - common namespaces
 - `deploy/` - post-render resources
     - `clusters/`
@@ -31,7 +48,7 @@ This example demonstrates one tenant with a workload that span multiple clusters
 - `scripts/`
     - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
 
-**ZonePrinter Repo (`repos/zoneprinter/`):**
+**PubSub Sample Repo (`repos/pubsub-sample/`):**
 
 - `config/` - pre-render resources
     - `clusters/`
@@ -63,7 +80,7 @@ For example, MultiClusterIngress resources need to be on one specific cluster in
 
 Resources also often share common attributes between multiple clusters or multiple namespaces.
 
-For example, each resource deployed as part of the zoneprinter workload may need a common `app: zoneprinter` label to aid observability.
+For example, each resource deployed as part of the pubsub-sample workload may need a common `app: pubsub-sample` label to aid observability.
 
 This example uses Kustomize to render the resources under `config/` and write them to `deploy/`.
 This allows for both differences and similarities between resources deployed to multiple clusters, and lays the ground work for supporting multiple namespaces as well.
@@ -114,12 +131,12 @@ gcloud container clusters create cluster-east \
 PLATFORM_REPO="https://github.com/USER_NAME/REPO_NAME/"
 ```
 
-**Create a Git repository for the ZonePrinter config:**
+**Create a Git repository for the PubSub Sample config:**
 
 [Github: Create a repo](https://docs.github.com/en/github/getting-started-with-github/create-a-repo)
 
 ```
-ZONEPRINTER_REPO="https://github.com/USER_NAME/REPO_NAME/"
+PUBSUB_SAMPLE_REPO="https://github.com/USER_NAME/REPO_NAME/"
 ```
 
 **Push platform config to the PLATFORM_REPO:**
@@ -143,21 +160,21 @@ git push
 cd ../..
 ```
 
-**Push zoneprinter config to the ZONEPRINTER_REPO:**
+**Push pubsub-sample config to the PUBSUB_SAMPLE_REPO:**
 
 ```
 mkdir -p .github/
 cd .github/
 
-git clone "${ZONEPRINTER_REPO}" zoneprinter
+git clone "${PUBSUB_SAMPLE_REPO}" pubsub-sample
 
-cp -r ../repos/zoneprinter/* zoneprinter/
+cp -r ../repos/pubsub-sample/* pubsub-sample/
 
-cd zoneprinter/
+cd pubsub-sample/
 
 git add .
 
-git commit -m "initialize zoneprinter config"
+git commit -m "initialize pubsub-sample config"
 
 git push
 
@@ -284,54 +301,112 @@ spec:
 EOF
 ```
 
-**Configure Anthos Config Management for zoneprinter config:**
+**Configure Anthos Config Management for pubsub-sample config:**
 
 ```
 cd .github/platform/
 
-mkdir -p config/clusters/cluster-west/namespaces/zoneprinter/
+mkdir -p config/clusters/cluster-west/namespaces/pubsub-sample/
 
-cat > config/clusters/cluster-west/namespaces/zoneprinter/repo-sync.yaml < EOF
+cat > config/clusters/cluster-west/namespaces/pubsub-sample/repo-sync.yaml < EOF
 apiVersion: configsync.gke.io/v1beta1
 kind: RepoSync
 metadata:
   name: repo-sync
-  namespace: zoneprinter
+  namespace: pubsub-sample
 spec:
   sourceFormat: unstructured
   git:
-    repo: ${ZONEPRINTER_REPO}
+    repo: ${PUBSUB_SAMPLE_REPO}
     revision: HEAD
     branch: master
-    dir: "deploy/clusters/cluster-west/namespaces/zoneprinter"
+    dir: "deploy/clusters/cluster-west/namespaces/pubsub-sample"
     auth: none
 EOF
 
-mkdir -p config/clusters/cluster-west/namespaces/zoneprinter/
+mkdir -p config/clusters/cluster-west/namespaces/pubsub-sample/
 
-cat > config/clusters/cluster-east/namespaces/zoneprinter/repo-sync.yaml < EOF
+cat > config/clusters/cluster-east/namespaces/pubsub-sample/repo-sync.yaml < EOF
 apiVersion: configsync.gke.io/v1beta1
 kind: RepoSync
 metadata:
   name: repo-sync
-  namespace: zoneprinter
+  namespace: pubsub-sample
 spec:
   sourceFormat: unstructured
   git:
-    repo: ${ZONEPRINTER_REPO}
+    repo: ${PUBSUB_SAMPLE_REPO}
     revision: HEAD
     branch: master
-    dir: "deploy/clusters/cluster-east/namespaces/zoneprinter"
+    dir: "deploy/clusters/cluster-east/namespaces/pubsub-sample"
     auth: none
 EOF
 
 git add .
 
-git commit -m "add zoneprinter repo-sync"
+git commit -m "add pubsub-sample repo-sync"
 
 git push
 
 cd ../..
+```
+
+**Create a GCP project for the pubsub-sample tenant:**
+
+This project will be managed by the tenant, rather than the platform admin,
+and will contain the PubSub queue used by the PubSub Sample.
+
+Project IDs need to be globally unique and 30 characters or less. 
+
+The following patten can help avoid overlaps: `${ORG_PREFIX}-${TENANT}-${RANDOM_SUFFIX}`
+
+```
+PUBSUB_SAMPLE_PROJECT_ID="example-pubsub-sample-1234"
+gcloud project create "${PUBSUB_SAMPLE_PROJECT_ID}" \
+    --organization ${ORGANIZATION_ID}
+```
+
+**Make sure that billing is enabled for your Cloud project:**
+
+[Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
+
+To link a project to a Cloud Billing account, you need `resourcemanager.projects.createBillingAssignment` on the project (included in `owner`, which you get if you created the project) AND `billing.resourceAssociations.create` on the Cloud Billing account.
+
+```
+gcloud alpha billing projects link "${PUBSUB_SAMPLE_PROJECT_ID}" \
+    --billing-account ${BILLING_ACCOUNT_ID}
+```
+
+**Enable required GCP services:**
+
+```
+gcloud services enable \
+    pubsub.googleapis.com \
+    cloudresourcemanager.googleapis.com
+```
+
+**Create a PubSub topic and subscription:**
+
+```
+gcloud pubsub topics create echo
+gcloud pubsub subscriptions create echo-read --topic echo
+```
+
+**Create a service account with access to Pub/Sub:**
+
+```
+gcloud iam service-accounts create pubsub-sample
+gcloud projects add-iam-policy-binding ${PUBSUB_SAMPLE_PROJECT_ID} \
+    --member "serviceAccount:pubsub-sample@${PUBSUB_SAMPLE_PROJECT_ID}.iam.gserviceaccount.com" \
+    --role "roles/pubsub.subscriber"
+```
+
+**Grant GKE access to use the service account for Workload Identity:**
+
+```
+gcloud projects add-iam-policy-binding "pubsub-sample@${PUBSUB_SAMPLE_PROJECT_ID}.iam.gserviceaccount.com" \
+    --member "serviceAccount:${PLATFORM_PROJECT_ID}.svc.id.goog[pubsub-sample/pubsub-sample]" \
+    --role "roles/iam.workloadIdentityUser"
 ```
 
 ## Validating success

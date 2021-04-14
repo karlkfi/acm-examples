@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- pubsub-sample-deploy.yaml
+- pubsub-sample-hpa.yaml
+namespace: pubsub-sample
+commonLabels:
+  app: pubsub-sample
+  owner: pubsub-sample-team
