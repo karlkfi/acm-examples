@@ -4,6 +4,8 @@ This examples demonstrates how to manage a tenant service that autoscales across
 
 This example also demonstrates how to manage cluster-scoped resources and a shared service that requires elevated permissions.
 
+This example is based on [Autoscaling Deployments with Cloud Monitoring metrics](https://cloud.google.com/kubernetes-engine/docs/tutorials/autoscaling-metrics), except it uses ConfigSync, kustomize, and Workload Identity to deploy to multiple multi-tenant clusters.
+
 ## Clusters
 
 - **cluster-east** - A multi-zone GKE cluster in the us-east1 region.
@@ -113,6 +115,8 @@ gcloud services enable \
 ```
 
 **Deploy the GKE clusters:**
+
+Aside from the default settings, Workload Identity will also be enabled.
 
 ```
 gcloud container clusters create cluster-west \

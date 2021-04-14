@@ -2,6 +2,8 @@
 
 This examples shows how to manage a service with Multi-Cluster Ingress using Anthos Config Management, GitOps, and Kustomize.
 
+This example is based on [Deploying Ingress across clusters](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress), except it uses ConfigSync and kustomize to deploy to multiple multi-tenant clusters.
+
 ## Clusters
 
 - **cluster-east** - A multi-zone GKE cluster in the us-east1 region.
@@ -99,11 +101,9 @@ gcloud services enable \
 
 ```
 gcloud container clusters create cluster-west \
-    --region us-west1 \
-    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog"
+    --region us-west1
 gcloud container clusters create cluster-east \
-    --region us-east1 \
-    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog"
+    --region us-east1
 ```
 
 **Create a Git repository for the Platform config:**
