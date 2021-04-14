@@ -18,41 +18,41 @@ This example demonstrates one tenant with a workload that span multiple clusters
 **Platform Repo (`repos/platform/`):**
 
 - `config/` - pre-render resources
-    - `clusters/` - directory for cluster-specific directories
-        - `${cluster-name}/` - cluster-specific resources and overlays
+    - `clusters/`
+        - `${cluster-name}/`
             - `kustomization.yaml` - cluster-specific overlays
-    - `common/` - directory for common resources
+    - `common/`
         - `kustomization.yaml` - common overlays
         - `namespaces.yaml` - common namespaces
 - `deploy/` - post-render resources
-    - `clusters/` - directory for cluster-specific directories
-        - `${cluster-name}/` - cluster-specific resources and overlays
+    - `clusters/`
+        - `${cluster-name}/`
             - `rendered.yaml` - cluster-specific post-render resources
-- `scripts/` - directory for scripts
+- `scripts/`
     - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
 
 **ZonePrinter Repo (`repos/zoneprinter/`):**
 
 - `config/` - pre-render resources
-    - `clusters/` - directory for cluster-specific directories
-        - `${cluster-name}/` - cluster-specific resources and overlays
-            - `namespaces/` - directory for namespace-specific directories
-                - `${namespace}/` - cluster-specific and namespace-specific resources and overlays
+    - `clusters/`
+        - `${cluster-name}/`
+            - `namespaces/`
+                - `${namespace}/`
                     - `kustomization.yaml` - cluster-specific and namespace-specific overlays
                     - `${name}-${kind}.yaml` - cluster-specific and namespace-specific resources
-    - `common/` - directory for common resources
-        - `${cluster-name}/` - cluster-specific resources and overlays
-            - `namespaces/` - directory for namespace-specific directories
-                - `${namespace}/` - cluster-agnostic but namespace-specific resources and overlays
+    - `common/`
+        - `${cluster-name}/`
+            - `namespaces/`
+                - `${namespace}/`
                     - `kustomization.yaml` - cluster-agnostic but namespace-specific overlays
                     - `${name}-${kind}.yaml` - cluster-agnostic but namespace-specific resources
 - `deploy/` - post-render resources
-    - `clusters/` - directory for cluster-specific directories
-        - `${cluster-name}/` - cluster-specific resources and overlays
-            - `namespaces/` - directory for namespace-specific directories
-                - `${namespace}/` - cluster-agnostic but namespace-specific resources and overlays
+    - `clusters/`
+        - `${cluster-name}/`
+            - `namespaces/`
+                - `${namespace}/`
                     - `rendered.yaml` - cluster-specific and namespace-specific post-render resources
-- `scripts/` - directory for scripts
+- `scripts/`
     - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
 
 ## Kustomize
