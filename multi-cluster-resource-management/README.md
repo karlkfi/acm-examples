@@ -1,6 +1,6 @@
-# Multi-Cluster Ingress
+# Multi-Cluster Resource Management
 
-This example shows how to manage Namespaces and ResourcQuota across multiple clusters using Anthos Config Management, GitOps, and Kustomize.
+This example shows how to manage Namespaces, ResourcQuotas, and RoleBindings across multiple clusters using Anthos Config Management, GitOps, and Kustomize.
 
 ## Clusters
 
@@ -35,6 +35,12 @@ This allows for common resources to be managed in one place and still be patched
 ## ConfigSync
 
 This example installs ConfigSync on two clusters and configures them to pull config from different `deploy/clusters/${cluster-name}/` directories in the same Git repository.
+
+## Access Control
+
+This example includes RoleBindings in each namespace to grant view permission to namespace users. 
+
+The users are configured to be different for each namespace, but the same across clusters.
 
 
 ## Before you begin
