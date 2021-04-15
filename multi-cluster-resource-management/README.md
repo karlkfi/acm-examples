@@ -12,12 +12,14 @@ This example shows how to manage Namespaces, ResourcQuotas, and RoleBindings acr
 **Platform Repo (`repos/platform/`):**
 
 - `config/` - pre-render resources
+    - `all-clusters/` - cluster-agnostic cluster-scoped resources
+        - `all-namespaces/` - cluster-agnostic and namespace-agnostic namespace-scoped resources
+        - `namespaces/`
+            - `${namespace}/` - cluster-agnostic but namespace-specific namespace-scoped resources
     - `clusters/`
         - `${cluster-name}/` - cluster-specific cluster-scoped resources
             - `namespaces/`
                 - `${namespace}/` - cluster-specific and namespace-specific namespace-scoped resources
-    - `all-clusters/` - cluster-agnostic cluster-scoped resources
-        - `all-namespaces/` - cluster-agnostic and namespace-agnostic namespace-scoped resources
 - `deploy/` - post-render resources
     - `clusters/`
         - `${cluster-name}/` - cluster-specific cluster-scoped resources
