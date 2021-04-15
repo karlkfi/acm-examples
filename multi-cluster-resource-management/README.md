@@ -30,9 +30,9 @@ This example shows how to manage Namespaces, ResourcQuotas, and RoleBindings acr
 
 ## Kustomize
 
-This example uses Kustomize to render the resources under `config/` and write them to `deploy/`.
+This example optionally uses Kustomize to render the resources under `config/` and write them to `deploy/`. This allows for common resources to be managed in one place and still be patched with cluster-specific and namespace-specific modifications.
 
-This allows for common resources to be managed in one place and still be patched with cluster-specific and namespace-specific modifications.
+However, if you don't want to manage chaining kustomize patches, it's also a valid option to just use the resources under the `deploy/` directory and skip the `config/` and `scripts/render.sh` script.
 
 ## ConfigSync
 
