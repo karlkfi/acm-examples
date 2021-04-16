@@ -44,6 +44,13 @@ This example includes RoleBindings in each namespace to grant view permission to
 
 The users are configured to be different for each namespace, but the same across clusters.
 
+## Progressive rollouts
+
+This example does not explicitly implement progressive rollouts, as described by [Safe rollouts with Anthos Config Management](https://cloud.google.com/architecture/safe-rollouts-with-anthos-config-management), because by default each cluster pulls from `HEAD` of the `main` Git branch.
+
+However, it's possible to adapt this example to roll out to each cluster individually if you change the RootSync `.spec.git.revision` of each cluster to point to a specific commit SHA or tag. That way you can manually gate the revision of config that each cluster will have applied.
+
+This method can protect against complete outage and allow for easy rollbacks, at the cost of a few more commits per rollout.
 
 ## Before you begin
 
