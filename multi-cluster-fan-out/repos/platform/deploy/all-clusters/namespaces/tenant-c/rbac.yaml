@@ -2,10 +2,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   labels:
-    cluster: cluster-west
     owner: platform-team
   name: namespace-viewer
-  namespace: tenant-a
+  namespace: tenant-c
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -13,7 +12,7 @@ roleRef:
 subjects:
 - apiGroup: rbac.authorization.k8s.io
   kind: User
-  name: user-a1
+  name: user-c1
 - apiGroup: rbac.authorization.k8s.io
   kind: User
-  name: user-a2
+  name: user-c2

@@ -15,31 +15,18 @@ The resources in this examples are identical accross both clusters. So ConfigSyn
 
 ```
 └── deploy
-    └── clusters
-        ├── cluster-east
-        │   ├── namespaces
-        │   │   ├── tenant-a
-        │   │   │   ├── quota.yaml
-        │   │   │   └── rbac.yaml
-        │   │   ├── tenant-b
-        │   │   │   ├── quota.yaml
-        │   │   │   └── rbac.yaml
-        │   │   └── tenant-c
-        │   │       ├── quota.yaml
-        │   │       └── rbac.yaml
-        │   └── namespaces.yaml
-        └── cluster-west
-            ├── namespaces
-            │   ├── tenant-a
-            │   │   ├── quota.yaml
-            │   │   └── rbac.yaml
-            │   ├── tenant-b
-            │   │   ├── quota.yaml
-            │   │   └── rbac.yaml
-            │   └── tenant-c
-            │       ├── quota.yaml
-            │       └── rbac.yaml
-            └── namespaces.yaml
+    └── all-clusters
+        ├── namespaces
+        │   ├── tenant-a
+        │   │   ├── quota.yaml
+        │   │   └── rbac.yaml
+        │   ├── tenant-b
+        │   │   ├── quota.yaml
+        │   │   └── rbac.yaml
+        │   └── tenant-c
+        │       ├── quota.yaml
+        │       └── rbac.yaml
+        └── namespaces.yaml
 ```
 
 ## Access Control
@@ -196,7 +183,7 @@ spec:
     repo: ${PLATFORM_REPO}
     revision: HEAD
     branch: main
-    dir: "deploy/clusters/cluster-west"
+    dir: "deploy/all-clusters"
     auth: none
 EOF
 
@@ -226,7 +213,7 @@ spec:
     repo: ${PLATFORM_REPO}
     revision: HEAD
     branch: main
-    dir: "deploy/clusters/cluster-east"
+    dir: "deploy/all-clusters"
     auth: none
 EOF
 ```
