@@ -31,48 +31,66 @@ Following security best practice, the shared service also runs in its own tenant
 
 **Platform Repo (`repos/platform/`):**
 
-- `config/` - pre-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `kustomization.yaml` - cluster-specific overlays
-    - `all-clusters/`
-        - `namespaces/`
-            - `${namespace}/`
-                - `kustomization.yaml` - cluster-agnostic but namespace-specific overlays
-                - `${name}-${kind}.yaml` - cluster-agnostic but namespace-specific resources
-        - `kustomization.yaml` - common overlays
-        - `${name}-${kind}.yaml` - common cluster-scoped resources
-        - `namespaces.yaml` - common namespaces
-- `deploy/` - post-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `rendered.yaml` - cluster-specific post-render resources
-- `scripts/`
-    - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
+```
+├── config
+│   ├── all-clusters
+│   │   ├── custom-metrics-apis.yaml
+│   │   ├── custom-metrics-rbac.yaml
+│   │   ├── kustomization.yaml
+│   │   ├── namespaces
+│   │   │   ├── custom-metrics
+│   │   │   │   ├── custom-metrics-deploy.yaml
+│   │   │   │   └── kustomization.yaml
+│   │   │   └── kube-system
+│   │   │       ├── custom-metrics-rbac.yaml
+│   │   │       └── kustomization.yaml
+│   │   └── namespaces.yaml
+│   └── clusters
+│       ├── cluster-east
+│       │   └── kustomization.yaml
+│       └── cluster-west
+│           └── kustomization.yaml
+├── deploy
+│   └── clusters
+│       ├── cluster-east
+│       │   └── manifest.yaml
+│       └── cluster-west
+│           └── manifest.yaml
+└── scripts
+    └── render.sh
+```
 
 **PubSub Sample Repo (`repos/pubsub-sample/`):**
 
-- `config/` - pre-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `namespaces/`
-                - `${namespace}/`
-                    - `kustomization.yaml` - cluster-specific and namespace-specific overlays
-                    - `${name}-${kind}.yaml` - cluster-specific and namespace-specific resources
-    - `all-clusters/`
-        - `${cluster-name}/`
-            - `namespaces/`
-                - `${namespace}/`
-                    - `kustomization.yaml` - cluster-agnostic but namespace-specific overlays
-                    - `${name}-${kind}.yaml` - cluster-agnostic but namespace-specific resources
-- `deploy/` - post-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `namespaces/`
-                - `${namespace}/`
-                    - `rendered.yaml` - cluster-specific and namespace-specific post-render resources
-- `scripts/`
-    - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
+```
+├── config
+│   ├── all-clusters
+│   │   └── namespaces
+│   │       └── pubsub-sample
+│   │           ├── kustomization.yaml
+│   │           └── pubsub-sample-deploy.yaml
+│   └── clusters
+│       ├── cluster-east
+│       │   └── namespaces
+│       │       └── pubsub-sample
+│       │           └── kustomization.yaml
+│       └── cluster-west
+│           └── namespaces
+│               └── pubsub-sample
+│                   └── kustomization.yaml
+├── deploy
+│   └── clusters
+│       ├── cluster-east
+│       │   └── namespaces
+│       │       └── pubsub-sample
+│       │           └── manifest.yaml
+│       └── cluster-west
+│           └── namespaces
+│               └── pubsub-sample
+│                   └── manifest.yaml
+└── scripts
+    └── render.sh
+```
 
 ## Kustomize
 
