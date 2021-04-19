@@ -597,7 +597,13 @@ gcloud services enable \
 
 **Add the platform and tenant projects to the metrics workspace:**
 
-Note: There's no gcloud module to manage workspaces yet.
+In order for a single adapter to be able to pull metrics from both projects, they both need to be added to a shared Cloud Monitoring Workspace.
+
+Since there is no gcloud module to manage workspaces yet, the shared workspace must be configured in Cloud Console.
+
+**TODO**: Blocked by a Stackdriver Workspaces bug (b/185518874).
+
+**TODO**: It is recommended practice is to use a third project to host the shared workspace, so the decision is easy to change later.
 
 In the Google Cloud Console, select the `${METRICS_PROJECT_ID}` project to be the host project for your Workspace:
 
@@ -644,6 +650,27 @@ Should include:
 for i in {1..200}; do gcloud pubsub topics publish echo --message="Autoscaling #${i}" --project ${PUBSUB_SAMPLE_PROJECT_ID}; done
 ```
 
+**Review the external metrics:**
+
+**TODO**: Why are the stackdriver metrics under custom.metrics, rather than external metrics?
+
+```
+$ kubectl get --raw '/apis/custom.metrics.k8s.io/v1beta2/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages' | jq .
+{
+  "kind": "MetricValueList",
+  "apiVersion": "custom.metrics.k8s.io/v1beta2",
+  "metadata": {
+    "selfLink": "/apis/custom.metrics.k8s.io/v1beta2/namespaces/%2A/pods/%2A/pubsub.googleapis.com%7Csubscription%7Cnum_undelivered_messages"
+  },
+  "items": []
+}
+```
+
+```
+$ kubectl get --raw '/apis/external.metrics.k8s.io/v1beta1/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages'
+Error from server (NotFound): the server could not find the requested resource
+```
+
 **Observe scale up:**
 
 ```
@@ -687,21 +714,3 @@ EOF
 gcloud container clusters delete cluster-west --region us-west1
 gcloud container clusters delete cluster-east --region us-east1
 ```
-
-
-
-google.auth.exceptions.RefreshError: ("Failed to retrieve http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/pubsub-sample@pubsub-sample-1234.iam.gserviceaccount.com/token from the Google Compute Enginemetadata service. Status: 404 Response:\nb'Unable to generate access token; IAM returned 404 Not Found: Requested entity was not found.\\n'", <google_auth_httplib2._Response object at 0x7f9f0ef11908>)
-
-$ kubectl get --raw '/apis/custom.metrics.k8s.io/v1beta2/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages' | jq .
-{
-  "kind": "MetricValueList",
-  "apiVersion": "custom.metrics.k8s.io/v1beta2",
-  "metadata": {
-    "selfLink": "/apis/custom.metrics.k8s.io/v1beta2/namespaces/%2A/pods/%2A/pubsub.googleapis.com%7Csubscription%7Cnum_undelivered_messages"
-  },
-  "items": []
-}
-
-kubectl get --raw '/apis/custom.metrics.k8s.io/v1beta2/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages?labelSelector=resource.labels.project_id=example-pubsub-sample-1234' | jq .
-
-kubectl get --raw '/apis/external.metrics.k8s.io/v1beta1/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages'
