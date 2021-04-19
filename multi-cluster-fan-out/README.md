@@ -45,6 +45,10 @@ Another option is to seperate the configuration for each cluster into different 
 
 To read more about progressive delivery patterns, see [Safe rollouts with Anthos Config Management](https://cloud.google.com/architecture/safe-rollouts-with-anthos-config-management).
 
+## ConfigSync
+
+This example installs ConfigSync on two clusters and configures them both to pull config from the same `deploy/all-clusters/` directory in the same Git repository.
+
 ## Before you begin
 
 1. Create or select a project.
@@ -71,6 +75,8 @@ gcloud services enable \
 ```
 
 **Create or select a network:**
+
+If you have the `compute.skipDefaultNetworkCreation` [organization policy constraint](https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints) enabled, you may have to create a network. Otherwise, just set the `NETWORK` variable for later use.
 
 ```
 NETWORK="default"

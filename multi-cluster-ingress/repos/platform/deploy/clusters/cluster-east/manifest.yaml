@@ -3,5 +3,5 @@ kind: Namespace
 metadata:
   labels:
     cluster: cluster-east
-    owner: platform-admin
+    owner: platform-team
   name: zoneprinter

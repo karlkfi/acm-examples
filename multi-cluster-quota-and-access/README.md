@@ -1,6 +1,20 @@
-# Multi-Cluster Resource Management
+# Multi-Cluster Quota and Access
 
 This example shows how to manage Namespaces, ResourcQuotas, and RoleBindings across multiple clusters using Anthos Config Management, GitOps, and Kustomize.
+
+## Quota defaults
+
+In this example, all namespaces are given a default ResourceQuota resource with a maximum set for CPU, memory, and pods. 
+
+This default resource is managed in `config/all-clusters/all-namespaces/resource-quota.yaml` and inherited using a `kustomization.yaml` file for each namespace in each cluster.
+
+There is also one example of the default quota being overridden for a specific namespace on a specific cluster, in `config/clusters/cluster-east/namespaces/tenant-a/resource-quota.yaml`.
+
+## Access control defaults
+
+This example includes RoleBindings in each namespace to grant view permission to namespace users. 
+
+The users are configured to be different for each namespace, but the same across clusters.
 
 ## Clusters
 
@@ -11,38 +25,84 @@ This example shows how to manage Namespaces, ResourcQuotas, and RoleBindings acr
 
 **Platform Repo (`repos/platform/`):**
 
-- `config/` - pre-render resources
-    - `all-clusters/` - cluster-agnostic cluster-scoped resources
-        - `all-namespaces/` - cluster-agnostic and namespace-agnostic namespace-scoped resources
-        - `namespaces/`
-            - `${namespace}/` - cluster-agnostic but namespace-specific namespace-scoped resources
-    - `clusters/`
-        - `${cluster-name}/` - cluster-specific cluster-scoped resources
-            - `namespaces/`
-                - `${namespace}/` - cluster-specific and namespace-specific namespace-scoped resources
-- `deploy/` - post-render resources
-    - `clusters/`
-        - `${cluster-name}/` - cluster-specific cluster-scoped resources
-            - `namespaces/`
-                - `${namespace}/` - cluster-specific and namespace-specific namespace-scoped resources
-- `scripts/`
-    - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
+```
+├── config
+│   ├── all-clusters
+│   │   ├── all-namespaces
+│   │   │   ├── kustomization.yaml
+│   │   │   └── resource-quota.yaml
+│   │   ├── kustomization.yaml
+│   │   ├── namespaces
+│   │   │   ├── tenant-a
+│   │   │   │   ├── kustomization.yaml
+│   │   │   │   └── rbac.yaml
+│   │   │   ├── tenant-b
+│   │   │   │   ├── kustomization.yaml
+│   │   │   │   └── rbac.yaml
+│   │   │   └── tenant-c
+│   │   │       ├── kustomization.yaml
+│   │   │       └── rbac.yaml
+│   │   └── namespaces.yaml
+│   └── clusters
+│       ├── cluster-east
+│       │   ├── kustomization.yaml
+│       │   └── namespaces
+│       │       ├── tenant-a
+│       │       │   ├── kustomization.yaml
+│       │       │   └── resource-quota.yaml
+│       │       ├── tenant-b
+│       │       │   └── kustomization.yaml
+│       │       └── tenant-c
+│       │           └── kustomization.yaml
+│       └── cluster-west
+│           ├── kustomization.yaml
+│           ├── namespaces
+│           │   ├── tenant-a
+│           │   │   └── kustomization.yaml
+│           │   ├── tenant-b
+│           │   │   └── kustomization.yaml
+│           │   └── tenant-c
+│           │       └── kustomization.yaml
+│           └── resource-quota.yaml
+├── deploy
+│   └── clusters
+│       ├── cluster-east
+│       │   ├── manifest.yaml
+│       │   └── namespaces
+│       │       ├── tenant-a
+│       │       │   └── manifest.yaml
+│       │       ├── tenant-b
+│       │       │   └── manifest.yaml
+│       │       └── tenant-c
+│       │           └── manifest.yaml
+│       └── cluster-west
+│           ├── manifest.yaml
+│           └── namespaces
+│               ├── tenant-a
+│               │   └── manifest.yaml
+│               ├── tenant-b
+│               │   └── manifest.yaml
+│               └── tenant-c
+│                   └── manifest.yaml
+└── scripts
+    └── render.sh
+```
 
 ## Kustomize
 
-This example optionally uses Kustomize to render the resources under `config/` and write them to `deploy/`. This allows for common resources to be managed in one place and still be patched with cluster-specific and namespace-specific modifications.
+In this example, some resources differ between clusters and between namespaces.
 
-However, if you don't want to manage chaining kustomize patches, it's also a valid option to just use the resources under the `deploy/` directory and skip the `config/` and `scripts/render.sh` script.
+Because of this, the resources specific to each cluster and the same on each cluster are managed in different places and merged together using Kustomize. Likewise, the resources specific to each namespace and the same in each namespace are managed in different places and merged together using Kustomize. This is not necessary in all cases, but it may help reduce the risk of misconfiguration between clusters and make it easier to roll out changes consistently.
+
+Kustomize is also being used here to add additional labels, to aid observability.
+
+To invoke Kustomize, execute `scripts/render.sh` to render the resources under `config/` and write them to `deploy/`.
+
+However, if you don't want to use Kustomize, it's also a valid option to just use the resources under the `deploy/` directory and skip the `config/` and `scripts/render.sh` script.
 
 ## ConfigSync
 
 This example installs ConfigSync on two clusters and configures them to pull config from different `deploy/clusters/${cluster-name}/` directories in the same Git repository.
-
-## Access Control
-
-This example includes RoleBindings in each namespace to grant view permission to namespace users. 
-
-The users are configured to be different for each namespace, but the same across clusters.
 
 ## Progressive rollouts
 
@@ -78,6 +138,8 @@ gcloud services enable \
 ```
 
 **Create or select a network:**
+
+If you have the `compute.skipDefaultNetworkCreation` [organization policy constraint](https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints) enabled, you may have to create a network. Otherwise, just set the `NETWORK` variable for later use.
 
 ```
 NETWORK="default"

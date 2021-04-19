@@ -4,6 +4,16 @@ This examples shows how to manage a service with Multi-Cluster Ingress using Ant
 
 This example is based on [Deploying Ingress across clusters](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress), except it uses ConfigSync and kustomize to deploy to multiple multi-tenant clusters.
 
+# Goals
+
+This usage of Multi-Cluster Ingress serves multiple goals:
+
+By using backends on multiple clusters in different regions, each with nodes in multiple zones, and a single global Virtual IP, the service can reach very **high availability**.
+
+By using backends on multiple clusters in different regions and Google's global [Cloud Load Balancer](https://cloud.google.com/load-balancing/docs/load-balancing-overview), which automatically routes traffic based on latency, availability, and capacity, the services can have very **low latency** for clients in different parts of the world.
+
+By using backends on multiple clusters, the service can reach very **high scale**, beyond that which can be supported by a single cluster.
+
 ## Clusters
 
 - **cluster-east** - A multi-zone GKE cluster in the us-east1 region.
@@ -19,58 +29,80 @@ This example demonstrates one tenant with a workload that span multiple clusters
 
 **Platform Repo (`repos/platform/`):**
 
-- `config/` - pre-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `kustomization.yaml` - cluster-specific overlays
-    - `common/`
-        - `kustomization.yaml` - common overlays
-        - `namespaces.yaml` - common namespaces
-- `deploy/` - post-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `rendered.yaml` - cluster-specific post-render resources
-- `scripts/`
-    - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
+```
+├── config
+│   ├── all-clusters
+│   │   ├── kustomization.yaml
+│   │   └── namespaces.yaml
+│   └── clusters
+│       ├── cluster-east
+│       │   └── kustomization.yaml
+│       └── cluster-west
+│           └── kustomization.yaml
+├── deploy
+│   └── clusters
+│       ├── cluster-east
+│       │   └── rendered.yaml
+│       └── cluster-west
+│           └── rendered.yaml
+└── scripts
+    └── render.sh
+```
 
 **ZonePrinter Repo (`repos/zoneprinter/`):**
 
-- `config/` - pre-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `namespaces/`
-                - `${namespace}/`
-                    - `kustomization.yaml` - cluster-specific and namespace-specific overlays
-                    - `${name}-${kind}.yaml` - cluster-specific and namespace-specific resources
-    - `common/`
-        - `${cluster-name}/`
-            - `namespaces/`
-                - `${namespace}/`
-                    - `kustomization.yaml` - cluster-agnostic but namespace-specific overlays
-                    - `${name}-${kind}.yaml` - cluster-agnostic but namespace-specific resources
-- `deploy/` - post-render resources
-    - `clusters/`
-        - `${cluster-name}/`
-            - `namespaces/`
-                - `${namespace}/`
-                    - `rendered.yaml` - cluster-specific and namespace-specific post-render resources
-- `scripts/`
-    - `render.sh` - script to render kustomize overlays from `config/` to `deploy/`
+```
+├── config
+│   ├── all-clusters
+│   │   └── namespaces
+│   │       └── zoneprinter
+│   │           ├── kustomization.yaml
+│   │           └── zoneprinter-deployment.yaml
+│   └── clusters
+│       ├── cluster-east
+│       │   └── namespaces
+│       │       └── zoneprinter
+│       │           └── kustomization.yaml
+│       └── cluster-west
+│           └── namespaces
+│               └── zoneprinter
+│                   ├── kustomization.yaml
+│                   └── mci.yaml
+├── deploy
+│   └── clusters
+│       ├── cluster-east
+│       │   └── namespaces
+│       │       └── zoneprinter
+│       │           └── rendered.yaml
+│       └── cluster-west
+│           └── namespaces
+│               └── zoneprinter
+│                   └── rendered.yaml
+└── scripts
+    └── render.sh
+```
+
+# Config Cluster
+
+In this example, the `cluster-west` cluster will be used as the [config cluster](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress-setup#specifying_a_config_cluster) for Multi-cluster Ingress. The [MultiClusterIngress](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress#multiclusteringress_spec) and [MultiClusterService](https://cloud.google.com/kubernetes-engine/docs/how-to/multi-cluster-ingress#multiclusterservice_spec) resources in the `mci.yaml` file are only being deployed to the `cluster-west` cluster.
+
+In a production environment, it may be desirable to use a third cluster as the config cluster, to reduce the risk that the config cluster is unavailable to make multi-cluster changes, but in this case we're using one of the two workload clusters in order to reduce costs.
 
 ## Kustomize
 
-Resources often differ between multiple clusters or multiple namespaces.
+In this example, some resources differ between clusters and between namespaces.
 
-For example, MultiClusterIngress resources need to be on one specific cluster in an Environ that is designated as the management server.
+Because of this, the resources specific to each cluster and the same on each cluster are managed in different places and merged together using Kustomize. This is not necessary in all cases, but it may help reduce the risk of misconfiguration between clusters and make it easier to roll out changes consistently.
 
-Resources also often share common attributes between multiple clusters or multiple namespaces.
+Kustomize is also being used here to add additional labels, to aid observability.
 
-For example, each resource deployed as part of the zoneprinter workload may need a common `app: zoneprinter` label to aid observability.
+To invoke Kustomize, execute `scripts/render.sh` to render the resources under `config/` and write them to `deploy/`.
 
-This example uses Kustomize to render the resources under `config/` and write them to `deploy/`.
-This allows for both differences and similarities between resources deployed to multiple clusters, and lays the ground work for supporting multiple namespaces as well.
+However, if you don't want to use Kustomize, it's also a valid option to just use the resources under the `deploy/` directory and skip the `config/` and `scripts/render.sh` script.
 
-ConfigSync is then configured on each cluster to watch a cluster-specific subdirectory under `deploy/`, in the same repository.
+## ConfigSync
+
+This example installs ConfigSync on two clusters and configures them to pull config from different `deploy/clusters/${cluster-name}/` directories in the same Git repository.
 
 ## Before you begin
 
@@ -97,13 +129,24 @@ gcloud services enable \
     cloudresourcemanager.googleapis.com
 ```
 
+**Create or select a network:**
+
+If you have the `compute.skipDefaultNetworkCreation` [organization policy constraint](https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints) enabled, you may have to create a network. Otherwise, just set the `NETWORK` variable for later use.
+
+```
+NETWORK="default"
+gcloud compute networks create ${NETWORK}
+```
+
 **Deploy the GKE clusters:**
 
 ```
 gcloud container clusters create cluster-west \
-    --region us-west1
+    --region us-west1 \
+    --network ${NETWORK}
 gcloud container clusters create cluster-east \
-    --region us-east1
+    --region us-east1 \
+    --network ${NETWORK}
 ```
 
 **Create a Git repository for the Platform config:**

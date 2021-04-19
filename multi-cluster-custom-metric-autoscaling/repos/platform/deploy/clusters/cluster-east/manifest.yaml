@@ -17,6 +17,8 @@ metadata:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
+  annotations:
+    iam.gke.io/gcp-service-account: custom-metrics-adapter@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com
   labels:
     cluster: cluster-east
     owner: platform-team
@@ -160,6 +162,9 @@ spec:
       - command:
         - /adapter
         - --use-new-resource-model=true
+        env:
+        - name: GOOGLE_CLOUD_PROJECT
+          value: ${PUBSUB_SAMPLE_PROJECT_ID}
         image: gcr.io/gke-release/custom-metrics-stackdriver-adapter:v0.12.0-gke.0
         imagePullPolicy: Always
         name: pod-custom-metrics-stackdriver-adapter

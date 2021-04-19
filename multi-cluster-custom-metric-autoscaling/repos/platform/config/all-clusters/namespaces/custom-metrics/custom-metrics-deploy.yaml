@@ -36,6 +36,9 @@ spec:
           requests:
             cpu: 250m
             memory: 200Mi
+        env:
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "${PUBSUB_SAMPLE_PROJECT_ID}"
 ---
 apiVersion: v1
 kind: Service
@@ -62,3 +65,5 @@ kind: ServiceAccount
 metadata:
   name: custom-metrics-stackdriver-adapter
   namespace: custom-metrics
+  annotations:
+    iam.gke.io/gcp-service-account: custom-metrics-adapter@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com

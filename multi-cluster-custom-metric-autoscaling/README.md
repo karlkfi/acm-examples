@@ -35,7 +35,7 @@ Following security best practice, the shared service also runs in its own tenant
     - `clusters/`
         - `${cluster-name}/`
             - `kustomization.yaml` - cluster-specific overlays
-    - `common/`
+    - `all-clusters/`
         - `namespaces/`
             - `${namespace}/`
                 - `kustomization.yaml` - cluster-agnostic but namespace-specific overlays
@@ -59,7 +59,7 @@ Following security best practice, the shared service also runs in its own tenant
                 - `${namespace}/`
                     - `kustomization.yaml` - cluster-specific and namespace-specific overlays
                     - `${name}-${kind}.yaml` - cluster-specific and namespace-specific resources
-    - `common/`
+    - `all-clusters/`
         - `${cluster-name}/`
             - `namespaces/`
                 - `${namespace}/`
@@ -96,7 +96,7 @@ ConfigSync is then configured on each cluster to watch a cluster-specific subdir
 
 ## Setting up your environment
 
-**Configure your default Google Cloud prject ID:**
+**Configure your default Google Cloud project ID:**
 
 ```
 PLATFORM_PROJECT_ID="PROJECT_ID"
@@ -111,20 +111,84 @@ gcloud services enable \
     anthos.googleapis.com \
     gkeconnect.googleapis.com \
     gkehub.googleapis.com \
+    stackdriver.googleapis.com \
     cloudresourcemanager.googleapis.com
+```
+
+**Create or select a network:**
+
+If you have the `compute.skipDefaultNetworkCreation` [organization policy constraint](https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints) enabled, you may have to create a network. Otherwise, just set the `NETWORK` variable for later use.
+
+```
+NETWORK="default"
+gcloud compute networks create ${NETWORK}
+```
+
+**Configure firewalls to allow unrestricted internal network traffic:**
+
+```
+gcloud compute firewall-rules create allow-all-internal \
+    --network ${NETWORK} \
+    --allow tcp,udp,icmp \
+    --source-ranges 10.0.0.0/8
+```
+
+**Deploy Cloud NAT to allow egress from private GKE nodes:**
+
+```
+# Create a us-west1 Cloud Router
+gcloud compute routers create nat-router-us-west1 \
+    --network ${NETWORK} \
+    --region us-west1
+
+# Add Cloud NAT to the us-west1 Cloud Router
+gcloud compute routers nats create nat-us-west1 \
+    --router-region us-west1 \
+    --router nat-router-us-west1 \
+    --auto-allocate-nat-external-ips \
+    --nat-all-subnet-ip-ranges \
+    --enable-logging
+
+# Create a us-east1 Cloud Router
+gcloud compute routers create nat-router-us-east1 \
+    --network ${NETWORK} \
+    --region us-east1
+
+# Add Cloud NAT to the us-east1 Cloud Router
+gcloud compute routers nats create nat-us-east1 \
+    --router-region us-east1 \
+    --router nat-router-us-east1 \
+    --auto-allocate-nat-external-ips \
+    --nat-all-subnet-ip-ranges \
+    --enable-logging
 ```
 
 **Deploy the GKE clusters:**
 
-Aside from the default settings, Workload Identity will also be enabled.
-
 ```
 gcloud container clusters create cluster-west \
     --region us-west1 \
-    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog"
+    --network ${NETWORK} \
+    --release-channel regular \
+    --enable-ip-alias \
+    --enable-private-nodes \
+    --master-ipv4-cidr 10.64.0.0/28 \
+    --master-authorized-networks 0.0.0.0/0 \
+    --enable-stackdriver-kubernetes \
+    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog" \
+    --enable-autoscaling --max-nodes 10 --min-nodes 1
+
 gcloud container clusters create cluster-east \
     --region us-east1 \
-    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog"
+    --network ${NETWORK} \
+    --release-channel regular \
+    --enable-ip-alias \
+    --enable-private-nodes \
+    --master-ipv4-cidr 10.64.0.16/28 \
+    --master-authorized-networks 0.0.0.0/0 \
+    --enable-stackdriver-kubernetes \
+    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog" \
+    --enable-autoscaling --max-nodes 10 --min-nodes 1
 ```
 
 **Create a Git repository for the Platform config:**
@@ -190,8 +254,8 @@ cd ../..
 ```
 gcloud container clusters get-credentials cluster-west --region us-west1
 
-# set kubectx alias for easy context switching
-kubectx cluster-west=. 
+# set alias for easy context switching
+CLUSTER_WEST_CONTEXT=$(kubectl config current-context)
 ```
 
 **Authenticate with cluster-east:**
@@ -199,38 +263,26 @@ kubectx cluster-west=.
 ```
 gcloud container clusters get-credentials cluster-east --region us-east1
 
-# set kubectx alias for easy context switching
-kubectx cluster-east=. 
+# set alias for easy context switching
+CLUSTER_EAST_CONTEXT=$(kubectl config current-context)
 ```
 
 **Register the clusters with Hub:**
 
 ```
-gcloud iam service-accounts keys create cluster-west-key.json \
-    --iam-account=cluster-west-hub@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com
-gcloud iam service-accounts keys create cluster-east-key.json \
-    --iam-account=cluster-east-hub@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com
-
-gcloud projects add-iam-policy-binding ${PLATFORM_PROJECT_ID} \
-    --member="serviceAccount:cluster-west-hub@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com" \
-    --role="roles/gkehub.connect"
-gcloud projects add-iam-policy-binding ${PLATFORM_PROJECT_ID} \
-    --member="serviceAccount:cluster-east-hub@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com" \
-    --role="roles/gkehub.connect"
-
 gcloud container hub memberships register cluster-west \
     --gke-cluster us-west1/cluster-west \
-    --service-account-key-file cluster-west-key.json
+    --enable-workload-identity
 gcloud container hub memberships register cluster-east \
     --gke-cluster us-east1/cluster-east \
-    --service-account-key-file cluster-east-key.json
+    --enable-workload-identity
 ```
 
 **Enable Multi-Cluster Ingress via Hub:**
 
 ```
 gcloud alpha container hub ingress enable \
-    --config-membership projects/${PROJECT}/locations/global/memberships/cluster-west
+    --config-membership projects/${PLATFORM_PROJECT_ID}/locations/global/memberships/cluster-west
 ```
 
 This configures cluster-west as the cluster to manage MultiClusterIngress and MultiClusterService resources for the Environ.
@@ -242,19 +294,19 @@ This configures cluster-west as the cluster to manage MultiClusterIngress and Mu
 ```
 gsutil cp gs://config-management-release/released/latest/config-management-operator.yaml config-management-operator.yaml
 
-kubectx cluster-west
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
 kubectl apply -f config-management-operator.yaml
 
-kubectx cluster-east
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
 kubectl apply -f config-management-operator.yaml
 ```
 
 **Configure Anthos Config Management for platform config:**
 
 ```
-kubectx cluster-west
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
 
-kubectl apply -f - < EOF
+kubectl apply -f - << EOF
 apiVersion: configmanagement.gke.io/v1
 kind: ConfigManagement
 metadata:
@@ -262,7 +314,11 @@ metadata:
 spec:
   clusterName: cluster-west
   enableMultiRepo: true
----
+EOF
+
+# Wait a few seconds for ConfigManagement to install the RootSync CRD
+
+kubectl apply -f - << EOF
 apiVersion: configsync.gke.io/v1beta1
 kind: RootSync
 metadata:
@@ -273,14 +329,14 @@ spec:
   git:
     repo: ${PLATFORM_REPO}
     revision: HEAD
-    branch: master
+    branch: main
     dir: "deploy/clusters/cluster-west"
     auth: none
 EOF
 
-kubectx cluster-east
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
 
-kubectl apply -f - < EOF
+kubectl apply -f - << EOF
 apiVersion: configmanagement.gke.io/v1
 kind: ConfigManagement
 metadata:
@@ -288,7 +344,11 @@ metadata:
 spec:
   clusterName: cluster-east
   enableMultiRepo: true
----
+EOF
+
+# Wait a few seconds for ConfigManagement to install the RootSync CRD
+
+kubectl apply -f - << EOF
 apiVersion: configsync.gke.io/v1beta1
 kind: RootSync
 metadata:
@@ -299,7 +359,7 @@ spec:
   git:
     repo: ${PLATFORM_REPO}
     revision: HEAD
-    branch: master
+    branch: main
     dir: "deploy/clusters/cluster-east"
     auth: none
 EOF
@@ -307,13 +367,13 @@ EOF
 
 **Configure Anthos Config Management for pubsub-sample config:**
 
+TODO: Switch to RepoSync v1beta1 once b/185390061 is fixed.
+
 ```
 cd .github/platform/
 
-mkdir -p config/clusters/cluster-west/namespaces/pubsub-sample/
-
-cat > config/clusters/cluster-west/namespaces/pubsub-sample/repo-sync.yaml < EOF
-apiVersion: configsync.gke.io/v1beta1
+cat > config/clusters/cluster-west/namespaces/pubsub-sample/repo-sync.yaml << EOF
+apiVersion: configsync.gke.io/v1alpha1
 kind: RepoSync
 metadata:
   name: repo-sync
@@ -323,15 +383,34 @@ spec:
   git:
     repo: ${PUBSUB_SAMPLE_REPO}
     revision: HEAD
-    branch: master
+    branch: main
     dir: "deploy/clusters/cluster-west/namespaces/pubsub-sample"
     auth: none
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: syncs-repo
+  namespace: pubsub-sample
+subjects:
+- kind: ServiceAccount
+  name: ns-reconciler-pubsub-sample
+  namespace: config-management-system
+roleRef:
+  kind: ClusterRole
+  name: admin
+  apiGroup: rbac.authorization.k8s.io
 EOF
 
-mkdir -p config/clusters/cluster-west/namespaces/pubsub-sample/
+cat > config/clusters/cluster-west/namespaces/pubsub-sample/kustomization.yaml << EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- repo-sync.yaml
+EOF
 
-cat > config/clusters/cluster-east/namespaces/pubsub-sample/repo-sync.yaml < EOF
-apiVersion: configsync.gke.io/v1beta1
+cat > config/clusters/cluster-east/namespaces/pubsub-sample/repo-sync.yaml << EOF
+apiVersion: configsync.gke.io/v1alpha1
 kind: RepoSync
 metadata:
   name: repo-sync
@@ -341,10 +420,33 @@ spec:
   git:
     repo: ${PUBSUB_SAMPLE_REPO}
     revision: HEAD
-    branch: master
+    branch: main
     dir: "deploy/clusters/cluster-east/namespaces/pubsub-sample"
     auth: none
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: syncs-repo
+  namespace: pubsub-sample
+subjects:
+- kind: ServiceAccount
+  name: ns-reconciler-pubsub-sample
+  namespace: config-management-system
+roleRef:
+  kind: ClusterRole
+  name: admin
+  apiGroup: rbac.authorization.k8s.io
 EOF
+
+cat > config/clusters/cluster-east/namespaces/pubsub-sample/kustomization.yaml << EOF
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- repo-sync.yaml
+EOF
+
+scripts/render.sh
 
 git add .
 
@@ -366,7 +468,8 @@ The following patten can help avoid overlaps: `${ORG_PREFIX}-${TENANT}-${RANDOM_
 
 ```
 PUBSUB_SAMPLE_PROJECT_ID="example-pubsub-sample-1234"
-gcloud project create "${PUBSUB_SAMPLE_PROJECT_ID}" \
+ORGANIZATION_ID="123456789012"
+gcloud projects create "${PUBSUB_SAMPLE_PROJECT_ID}" \
     --organization ${ORGANIZATION_ID}
 ```
 
@@ -377,6 +480,7 @@ gcloud project create "${PUBSUB_SAMPLE_PROJECT_ID}" \
 To link a project to a Cloud Billing account, you need `resourcemanager.projects.createBillingAssignment` on the project (included in `owner`, which you get if you created the project) AND `billing.resourceAssociations.create` on the Cloud Billing account.
 
 ```
+BILLING_ACCOUNT_ID="AAAAAA-BBBBBB-CCCCCC"
 gcloud alpha billing projects link "${PUBSUB_SAMPLE_PROJECT_ID}" \
     --billing-account ${BILLING_ACCOUNT_ID}
 ```
@@ -386,39 +490,193 @@ gcloud alpha billing projects link "${PUBSUB_SAMPLE_PROJECT_ID}" \
 ```
 gcloud services enable \
     pubsub.googleapis.com \
-    cloudresourcemanager.googleapis.com
+    stackdriver.googleapis.com \
+    cloudresourcemanager.googleapis.com \
+    --project ${PUBSUB_SAMPLE_PROJECT_ID}
 ```
 
 **Create a PubSub topic and subscription:**
 
 ```
-gcloud pubsub topics create echo
-gcloud pubsub subscriptions create echo-read --topic echo
+gcloud pubsub topics create echo \
+    --project ${PUBSUB_SAMPLE_PROJECT_ID}
+gcloud pubsub subscriptions create echo-read --topic echo \
+    --project ${PUBSUB_SAMPLE_PROJECT_ID}
 ```
 
-**Create a service account with access to Pub/Sub:**
+**Create a service account for the pubsub-sample deployment:**
+
+The service account needs to be in the same project as the GKE cluster, in order for Workload Identity to work.
 
 ```
-gcloud iam service-accounts create pubsub-sample
-gcloud projects add-iam-policy-binding ${PUBSUB_SAMPLE_PROJECT_ID} \
-    --member "serviceAccount:pubsub-sample@${PUBSUB_SAMPLE_PROJECT_ID}.iam.gserviceaccount.com" \
+gcloud iam service-accounts create pubsub-sample \
+    --project ${PLATFORM_PROJECT_ID}
+
+gcloud projects add-iam-policy-binding \
+    ${PUBSUB_SAMPLE_PROJECT_ID} \
+    --member "serviceAccount:pubsub-sample@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com" \
     --role "roles/pubsub.subscriber"
 ```
 
 **Grant GKE access to use the service account for Workload Identity:**
 
 ```
-gcloud projects add-iam-policy-binding "pubsub-sample@${PUBSUB_SAMPLE_PROJECT_ID}.iam.gserviceaccount.com" \
+gcloud iam service-accounts add-iam-policy-binding \
+    "pubsub-sample@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com" \
     --member "serviceAccount:${PLATFORM_PROJECT_ID}.svc.id.goog[pubsub-sample/pubsub-sample]" \
-    --role "roles/iam.workloadIdentityUser"
+    --role "roles/iam.workloadIdentityUser" \
+    --project ${PLATFORM_PROJECT_ID}
 ```
+
+**Create a service account for the custom-metrics-stackdriver-adapter deployment:**
+
+The service account needs to be in the same project as the GKE cluster, in order for Workload Identity to work.
+
+```
+gcloud iam service-accounts create custom-metrics-adapter \
+    --project ${PLATFORM_PROJECT_ID}
+
+gcloud projects add-iam-policy-binding \
+    ${PUBSUB_SAMPLE_PROJECT_ID} \
+    --member "serviceAccount:custom-metrics-adapter@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com" \
+    --role "roles/monitoring.viewer"
+
+gcloud projects add-iam-policy-binding \
+    ${PLATFORM_PROJECT_ID} \
+    --member "serviceAccount:custom-metrics-adapter@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com" \
+    --role "roles/monitoring.viewer"
+```
+
+**Grant GKE access to use the service account for Workload Identity:**
+
+```
+gcloud iam service-accounts add-iam-policy-binding \
+    "custom-metrics-adapter@${PLATFORM_PROJECT_ID}.iam.gserviceaccount.com" \
+    --member "serviceAccount:${PLATFORM_PROJECT_ID}.svc.id.goog[custom-metrics/custom-metrics-stackdriver-adapter]" \
+    --role "roles/iam.workloadIdentityUser" \
+    --project ${PLATFORM_PROJECT_ID}
+```
+
+
+**Create a GCP project for the Cloud Monitoring workspace:**
+
+This project will manage the workspace that aggregates metrics from both the platform and tenant projects.
+This shared workspace will allow the metrics adapter to retrieve metrics from multiple projects.
+
+Project IDs need to be globally unique and 30 characters or less. 
+
+The following patten can help avoid overlaps: `${ORG_PREFIX}-${TENANT}-${RANDOM_SUFFIX}`
+
+```
+METRICS_PROJECT_ID="example-platform-metrics-1234"
+ORGANIZATION_ID="123456789012"
+gcloud projects create "${METRICS_PROJECT_ID}" \
+    --organization ${ORGANIZATION_ID}
+```
+
+**Make sure that billing is enabled for your Cloud project:**
+
+[Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
+
+To link a project to a Cloud Billing account, you need `resourcemanager.projects.createBillingAssignment` on the project (included in `owner`, which you get if you created the project) AND `billing.resourceAssociations.create` on the Cloud Billing account.
+
+```
+BILLING_ACCOUNT_ID="AAAAAA-BBBBBB-CCCCCC"
+gcloud alpha billing projects link "${METRICS_PROJECT_ID}" \
+    --billing-account ${BILLING_ACCOUNT_ID}
+```
+
+**Enable required GCP services:**
+
+```
+gcloud services enable \
+    cloudresourcemanager.googleapis.com \
+    stackdriver.googleapis.com \
+    --project ${METRICS_PROJECT_ID}
+```
+
+**Add the platform and tenant projects to the metrics workspace:**
+
+Note: There's no gcloud module to manage workspaces yet.
+
+In the Google Cloud Console, select the `${METRICS_PROJECT_ID}` project to be the host project for your Workspace:
+
+1. Go to [Cloud Console](https://console.cloud.google.com/)
+1. Select the `${METRICS_PROJECT_ID}` project with the Cloud Console project picker.
+1. In the navigation pane, select **Monitoring** and then select **Settings**.  open the **Add your project to a Workspace** window.
+1. Click **Add** to create the Workspace.
+
+Once the Workspace is created, add the other projects to your Workspace:
+
+1. Click **Add GCP projects** to create the Workspace.
+1. Select `${PLATFORM_PROJECT_ID}` and `${PLATFORM_PROJECT_ID}` to add to the new Workspace. 
+1. Click **Add projects** to save the changes.
 
 ## Validating success
 
 **Wait for config to be deployed:**
 
 ```
-...
+nomos status
+```
+
+Should say "SYNCED" for both clusters.
+
+```
+kubectl get ns
+```
+
+Should include:
+- config-management-monitoring
+- config-management-system
+- custom-metrics
+- default
+- gke-connect
+- kube-node-lease
+- kube-public
+- kube-system
+- pubsub-sample
+- resource-group-system
+
+**Generate 200 Pub/Sub messages:**
+
+```
+for i in {1..200}; do gcloud pubsub topics publish echo --message="Autoscaling #${i}" --project ${PUBSUB_SAMPLE_PROJECT_ID}; done
+```
+
+**Observe scale up:**
+
+```
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
+kubectl get deployment pubsub-sample -n pubsub-sample
+
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
+kubectl get deployment pubsub-sample -n pubsub-sample
+```
+
+```
+kubectl apply -f - << EOF
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: custom-metrics-test
+rules:
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: custom-metrics-test
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: custom-metrics-test
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: system:anonymous
+EOF
 ```
 
 ## Cleaning up
@@ -429,3 +687,21 @@ gcloud projects add-iam-policy-binding "pubsub-sample@${PUBSUB_SAMPLE_PROJECT_ID
 gcloud container clusters delete cluster-west --region us-west1
 gcloud container clusters delete cluster-east --region us-east1
 ```
+
+
+
+google.auth.exceptions.RefreshError: ("Failed to retrieve http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/pubsub-sample@pubsub-sample-1234.iam.gserviceaccount.com/token from the Google Compute Enginemetadata service. Status: 404 Response:\nb'Unable to generate access token; IAM returned 404 Not Found: Requested entity was not found.\\n'", <google_auth_httplib2._Response object at 0x7f9f0ef11908>)
+
+$ kubectl get --raw '/apis/custom.metrics.k8s.io/v1beta2/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages' | jq .
+{
+  "kind": "MetricValueList",
+  "apiVersion": "custom.metrics.k8s.io/v1beta2",
+  "metadata": {
+    "selfLink": "/apis/custom.metrics.k8s.io/v1beta2/namespaces/%2A/pods/%2A/pubsub.googleapis.com%7Csubscription%7Cnum_undelivered_messages"
+  },
+  "items": []
+}
+
+kubectl get --raw '/apis/custom.metrics.k8s.io/v1beta2/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages?labelSelector=resource.labels.project_id=example-pubsub-sample-1234' | jq .
+
+kubectl get --raw '/apis/external.metrics.k8s.io/v1beta1/namespaces/*/pods/*/pubsub.googleapis.com|subscription|num_undelivered_messages'
