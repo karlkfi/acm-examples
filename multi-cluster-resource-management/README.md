@@ -46,11 +46,11 @@ The users are configured to be different for each namespace, but the same across
 
 ## Progressive rollouts
 
-This example does not explicitly implement progressive rollouts, as described by [Safe rollouts with Anthos Config Management](https://cloud.google.com/architecture/safe-rollouts-with-anthos-config-management), because by default each cluster pulls from `HEAD` of the `main` Git branch.
+This example demonstrates the deployment of resources to multiple clusters at the same time. In a production environment, you may want to reduce the risk of rolling out changes by deploying to each cluster individually and/or by deploying to a staging environment first.
 
-However, it's possible to adapt this example to roll out to each cluster individually if you change the RootSync `.spec.git.revision` of each cluster to point to a specific commit SHA or tag. That way you can manually gate the revision of config that each cluster will have applied.
+One way to do that is to change `.spec.git.revision` in the RootSync for each cluster to point to a specific commit SHA or tag. That way, both clusters will pull from a specific revision, instead of both pulling from `HEAD` of the `main` branch. This method may help protect against complete outage and allow for easy rollbacks, at the cost of a few more commits per rollout.
 
-This method can protect against complete outage and allow for easy rollbacks, at the cost of a few more commits per rollout.
+To read more about progressive delivery patterns, see [Safe rollouts with Anthos Config Management](https://cloud.google.com/architecture/safe-rollouts-with-anthos-config-management).
 
 ## Before you begin
 
