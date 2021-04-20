@@ -379,11 +379,19 @@ cd ../..
 
 ## Validating success
 
+**Lookup latest commit SHA:**
+
+```
+(cd .github/platform/ && git log -1 --oneline)
+```
+
 **Wait for config to be deployed:**
 
 ```
-...
+nomos status
 ```
+
+Should say "SYNCED" for both clusters with the latest commit SHA.
 
 ## Cleaning up
 
