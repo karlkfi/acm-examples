@@ -109,15 +109,34 @@ ConfigSync is then configured on each cluster to watch a cluster-specific subdir
 
 ## Before you begin
 
-1. Create or select a project.
-2. Make sure that billing is enabled for your Cloud project. [Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
+**Create or select a project:**
+
+```
+PLATFORM_PROJECT_ID="example-platform-1234"
+ORGANIZATION_ID="123456789012"
+
+gcloud projects create "${PLATFORM_PROJECT_ID}" \
+    --organization ${ORGANIZATION_ID}
+```
+
+**Enable billing for your project:**
+
+[Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
+
+To link a project to a Cloud Billing account, you need `resourcemanager.projects.createBillingAssignment` on the project (included in `owner`, which you get if you created the project) AND `billing.resourceAssociations.create` on the Cloud Billing account.
+
+```
+BILLING_ACCOUNT_ID="AAAAAA-BBBBBB-CCCCCC"
+
+gcloud alpha billing projects link "${PLATFORM_PROJECT_ID}" \
+    --billing-account ${BILLING_ACCOUNT_ID}
+```
 
 ## Setting up your environment
 
 **Configure your default Google Cloud project ID:**
 
 ```
-PLATFORM_PROJECT_ID="PROJECT_ID"
 gcloud config set project ${PLATFORM_PROJECT_ID}
 ```
 
