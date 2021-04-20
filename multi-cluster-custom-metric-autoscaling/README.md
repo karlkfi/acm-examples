@@ -109,139 +109,21 @@ ConfigSync is then configured on each cluster to watch a cluster-specific subdir
 
 ## Before you begin
 
-**Create or select a project:**
-
-```
-PLATFORM_PROJECT_ID="example-platform-1234"
-ORGANIZATION_ID="123456789012"
-
-gcloud projects create "${PLATFORM_PROJECT_ID}" \
-    --organization ${ORGANIZATION_ID}
-```
-
-**Enable billing for your project:**
-
-[Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
-
-To link a project to a Cloud Billing account, you need `resourcemanager.projects.createBillingAssignment` on the project (included in `owner`, which you get if you created the project) AND `billing.resourceAssociations.create` on the Cloud Billing account.
-
-```
-BILLING_ACCOUNT_ID="AAAAAA-BBBBBB-CCCCCC"
-
-gcloud alpha billing projects link "${PLATFORM_PROJECT_ID}" \
-    --billing-account ${BILLING_ACCOUNT_ID}
-```
-
-## Setting up your environment
-
-**Configure your default Google Cloud project ID:**
-
-```
-gcloud config set project ${PLATFORM_PROJECT_ID}
-```
+1. Follow the [Multi-Cluster Anthos Config Management Setup](./multi-cluster-acm-setup/) tutorial to deploy two GKE clusters and install ACM.
 
 **Enable required GCP services:**
 
 ```
 gcloud services enable \
-    container.googleapis.com \
-    anthos.googleapis.com \
-    gkeconnect.googleapis.com \
-    gkehub.googleapis.com \
-    stackdriver.googleapis.com \
-    cloudresourcemanager.googleapis.com
+    stackdriver.googleapis.com
 ```
 
-**Create or select a network:**
-
-If you have the `compute.skipDefaultNetworkCreation` [organization policy constraint](https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints) enabled, you may have to create a network. Otherwise, just set the `NETWORK` variable for later use.
-
-```
-NETWORK="default"
-gcloud compute networks create ${NETWORK}
-```
-
-**Configure firewalls to allow unrestricted internal network traffic:**
-
-```
-gcloud compute firewall-rules create allow-all-internal \
-    --network ${NETWORK} \
-    --allow tcp,udp,icmp \
-    --source-ranges 10.0.0.0/8
-```
-
-**Deploy Cloud NAT to allow egress from private GKE nodes:**
-
-```
-# Create a us-west1 Cloud Router
-gcloud compute routers create nat-router-us-west1 \
-    --network ${NETWORK} \
-    --region us-west1
-
-# Add Cloud NAT to the us-west1 Cloud Router
-gcloud compute routers nats create nat-us-west1 \
-    --router-region us-west1 \
-    --router nat-router-us-west1 \
-    --auto-allocate-nat-external-ips \
-    --nat-all-subnet-ip-ranges \
-    --enable-logging
-
-# Create a us-east1 Cloud Router
-gcloud compute routers create nat-router-us-east1 \
-    --network ${NETWORK} \
-    --region us-east1
-
-# Add Cloud NAT to the us-east1 Cloud Router
-gcloud compute routers nats create nat-us-east1 \
-    --router-region us-east1 \
-    --router nat-router-us-east1 \
-    --auto-allocate-nat-external-ips \
-    --nat-all-subnet-ip-ranges \
-    --enable-logging
-```
-
-**Deploy the GKE clusters:**
-
-```
-gcloud container clusters create cluster-west \
-    --region us-west1 \
-    --network ${NETWORK} \
-    --release-channel regular \
-    --enable-ip-alias \
-    --enable-private-nodes \
-    --master-ipv4-cidr 10.64.0.0/28 \
-    --master-authorized-networks 0.0.0.0/0 \
-    --enable-stackdriver-kubernetes \
-    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog" \
-    --enable-autoscaling --max-nodes 10 --min-nodes 1
-
-gcloud container clusters create cluster-east \
-    --region us-east1 \
-    --network ${NETWORK} \
-    --release-channel regular \
-    --enable-ip-alias \
-    --enable-private-nodes \
-    --master-ipv4-cidr 10.64.0.16/28 \
-    --master-authorized-networks 0.0.0.0/0 \
-    --enable-stackdriver-kubernetes \
-    --workload-pool "${PLATFORM_PROJECT_ID}.svc.id.goog" \
-    --enable-autoscaling --max-nodes 10 --min-nodes 1
-```
-
-**Create a Git repository for the Platform config:**
+## Create a Git repository for Platform config
 
 [Github: Create a repo](https://docs.github.com/en/github/getting-started-with-github/create-a-repo)
 
 ```
 PLATFORM_REPO="https://github.com/USER_NAME/REPO_NAME/"
-```
-
-**Create a Git repository for the PubSub Sample config:**
-
-[Github: Create a repo](https://docs.github.com/en/github/getting-started-with-github/create-a-repo)
-
-```
-PUBSUB_SAMPLE_REPO="https://github.com/USER_NAME/REPO_NAME/"
 ```
 
 **Push platform config to the PLATFORM_REPO:**
@@ -265,6 +147,14 @@ git push
 cd ../..
 ```
 
+## Create a Git repository for PubSub Sample config
+
+[Github: Create a repo](https://docs.github.com/en/github/getting-started-with-github/create-a-repo)
+
+```
+PUBSUB_SAMPLE_REPO="https://github.com/USER_NAME/REPO_NAME/"
+```
+
 **Push pubsub-sample config to the PUBSUB_SAMPLE_REPO:**
 
 ```
@@ -286,59 +176,7 @@ git push
 cd ../..
 ```
 
-**Authenticate with cluster-west:**
-
-```
-gcloud container clusters get-credentials cluster-west --region us-west1
-
-# set alias for easy context switching
-CLUSTER_WEST_CONTEXT=$(kubectl config current-context)
-```
-
-**Authenticate with cluster-east:**
-
-```
-gcloud container clusters get-credentials cluster-east --region us-east1
-
-# set alias for easy context switching
-CLUSTER_EAST_CONTEXT=$(kubectl config current-context)
-```
-
-**Register the clusters with Hub:**
-
-```
-gcloud container hub memberships register cluster-west \
-    --gke-cluster us-west1/cluster-west \
-    --enable-workload-identity
-gcloud container hub memberships register cluster-east \
-    --gke-cluster us-east1/cluster-east \
-    --enable-workload-identity
-```
-
-**Enable Multi-Cluster Ingress via Hub:**
-
-```
-gcloud alpha container hub ingress enable \
-    --config-membership projects/${PLATFORM_PROJECT_ID}/locations/global/memberships/cluster-west
-```
-
-This configures cluster-west as the cluster to manage MultiClusterIngress and MultiClusterService resources for the Environ.
-
-**Deploy Anthos Config Management:**
-
-**TODO**: replace manual deploy with `gcloud container hub config-management apply`, once it supports multi-repo.
-
-```
-gsutil cp gs://config-management-release/released/latest/config-management-operator.yaml config-management-operator.yaml
-
-kubectl config use-context ${CLUSTER_WEST_CONTEXT}
-kubectl apply -f config-management-operator.yaml
-
-kubectl config use-context ${CLUSTER_EAST_CONTEXT}
-kubectl apply -f config-management-operator.yaml
-```
-
-**Configure Anthos Config Management for platform config:**
+## Configure Anthos Config Management for platform config
 
 ```
 kubectl config use-context ${CLUSTER_WEST_CONTEXT}
@@ -402,7 +240,7 @@ spec:
 EOF
 ```
 
-**Configure Anthos Config Management for pubsub-sample config:**
+## Configure Anthos Config Management for pubsub-sample config
 
 TODO: Switch to RepoSync v1beta1 once b/185390061 is fixed.
 
@@ -494,7 +332,7 @@ git push
 cd ../..
 ```
 
-**Create a GCP project for the pubsub-sample tenant:**
+# Create a GCP project for the pubsub-sample tenant
 
 This project will be managed by the tenant, rather than the platform admin,
 and will contain the PubSub queue used by the PubSub Sample.
@@ -594,8 +432,7 @@ gcloud iam service-accounts add-iam-policy-binding \
     --project ${PLATFORM_PROJECT_ID}
 ```
 
-
-**Create a GCP project for the Cloud Monitoring workspace:**
+# Create a GCP project for the Cloud Monitoring workspace
 
 This project will manage the workspace that aggregates metrics from both the platform and tenant projects.
 This shared workspace will allow the metrics adapter to retrieve metrics from multiple projects.
@@ -674,20 +511,17 @@ Should say "SYNCED" for both clusters with the latest commit SHA.
 **Verify expected namespaces exist:**
 
 ```
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
+kubectl get ns
+
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
 kubectl get ns
 ```
 
-Should include:
-- config-management-monitoring
-- config-management-system
-- custom-metrics
-- default
-- gke-connect
-- kube-node-lease
-- kube-public
-- kube-system
-- pubsub-sample
-- resource-group-system
+Should include (non-exclusive):
+- tenant-a
+- tenant-b
+- tenant-c
 
 **Generate 200 Pub/Sub messages:**
 
@@ -753,9 +587,16 @@ EOF
 
 ## Cleaning up
 
-**Delete the GKE clusters:**
+Follow the Clean up instructions on the [Setup](../multi-cluster-acm-setup/) tutorial to delete the clusters, network, and project.
+
+**Delete the PubSub Sample project:**
 
 ```
-gcloud container clusters delete cluster-west --region us-west1
-gcloud container clusters delete cluster-east --region us-east1
+gcloud projects delete "${PUBSUB_SAMPLE_PROJECT_ID}"
+```
+
+**Delete the metrics project:**
+
+```
+gcloud projects delete ${METRICS_PROJECT_ID}
 ```

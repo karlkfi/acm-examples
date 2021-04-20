@@ -2,6 +2,8 @@
 
 This example shows how to manage Namespaces, RoleBindings, and ResourcQuotas across multiple clusters using Anthos Config Management, GitOps, and Kustomize.
 
+The resources in this examples are different for each cluster. So ConfigSync is configured to pull config from different directories. If you want your config to be identical for every cluster, check out the [Multi-Cluster Access and Quota](../multi-cluster-access-and-quota/) tutorial instead.
+
 ## Namespace management
 
 In this example, each cluster includes the same namespaces. This is not strictly required, but makes it easier to manage a set of clusters.
@@ -122,72 +124,9 @@ To read more about progressive delivery patterns, see [Safe rollouts with Anthos
 
 ## Before you begin
 
-**Create or select a project:**
+1. Follow the [Multi-Cluster Anthos Config Management Setup](./multi-cluster-acm-setup/) tutorial to deploy two GKE clusters and install ACM.
 
-```
-PLATFORM_PROJECT_ID="example-platform-1234"
-ORGANIZATION_ID="123456789012"
-
-gcloud projects create "${PLATFORM_PROJECT_ID}" \
-    --organization ${ORGANIZATION_ID}
-```
-
-**Enable billing for your project:**
-
-[Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
-
-To link a project to a Cloud Billing account, you need `resourcemanager.projects.createBillingAssignment` on the project (included in `owner`, which you get if you created the project) AND `billing.resourceAssociations.create` on the Cloud Billing account.
-
-```
-BILLING_ACCOUNT_ID="AAAAAA-BBBBBB-CCCCCC"
-
-gcloud alpha billing projects link "${PLATFORM_PROJECT_ID}" \
-    --billing-account ${BILLING_ACCOUNT_ID}
-```
-
-## Setting up your environment
-
-**Configure your default Google Cloud project ID:**
-
-```
-gcloud config set project ${PLATFORM_PROJECT_ID}
-```
-
-**Enable required GCP services:**
-
-```
-gcloud services enable \
-    container.googleapis.com \
-    anthos.googleapis.com \
-    gkeconnect.googleapis.com \
-    gkehub.googleapis.com \
-    cloudresourcemanager.googleapis.com
-```
-
-**Create or select a network:**
-
-If you have the `compute.skipDefaultNetworkCreation` [organization policy constraint](https://cloud.google.com/resource-manager/docs/organization-policy/org-policy-constraints) enabled, you may have to create a network. Otherwise, just set the `NETWORK` variable for later use.
-
-```
-NETWORK="default"
-gcloud compute networks create ${NETWORK}
-```
-
-**Deploy the GKE clusters:**
-
-```
-gcloud container clusters create cluster-west \
-    --region us-west1 \
-    --network ${NETWORK} \
-    --release-channel regular
-
-gcloud container clusters create cluster-east \
-    --region us-east1 \
-    --network ${NETWORK} \
-    --release-channel regular
-```
-
-**Create a Git repository for the Platform config:**
+## Create a Git repository for Platform config
 
 [Github: Create a repo](https://docs.github.com/en/github/getting-started-with-github/create-a-repo)
 
@@ -216,50 +155,7 @@ git push
 cd ../..
 ```
 
-**Authenticate with cluster-west:**
-
-```
-gcloud container clusters get-credentials cluster-west --region us-west1
-
-# set alias for easy context switching
-CLUSTER_WEST_CONTEXT=$(kubectl config current-context)
-```
-
-**Authenticate with cluster-east:**
-
-```
-gcloud container clusters get-credentials cluster-east --region us-east1
-
-# set alias for easy context switching
-CLUSTER_EAST_CONTEXT=$(kubectl config current-context)
-```
-
-**Register the clusters with Hub:**
-
-```
-gcloud container hub memberships register cluster-west \
-    --gke-cluster us-west1/cluster-west \
-    --enable-workload-identity
-gcloud container hub memberships register cluster-east \
-    --gke-cluster us-east1/cluster-east \
-    --enable-workload-identity
-```
-
-**Deploy Anthos Config Management:**
-
-**TODO**: replace manual deploy with `gcloud container hub config-management apply`, once it supports multi-repo.
-
-```
-gsutil cp gs://config-management-release/released/latest/config-management-operator.yaml config-management-operator.yaml
-
-kubectl config use-context ${CLUSTER_WEST_CONTEXT}
-kubectl apply -f config-management-operator.yaml
-
-kubectl config use-context ${CLUSTER_EAST_CONTEXT}
-kubectl apply -f config-management-operator.yaml
-```
-
-**Configure Anthos Config Management for platform config:**
+## Configure Anthos Config Management for platform config
 
 ```
 kubectl config use-context ${CLUSTER_WEST_CONTEXT}
@@ -342,27 +238,41 @@ Should say "SYNCED" for both clusters with the latest commit SHA.
 **Verify expected namespaces exist:**
 
 ```
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
+kubectl get ns
+
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
 kubectl get ns
 ```
 
-Should include:
-- config-management-monitoring
-- config-management-system
-- default
-- gke-connect
-- kube-node-lease
-- kube-public
-- kube-system
-- resource-group-system
+Should include (non-exclusive):
 - tenant-a
 - tenant-b
 - tenant-c
 
+**Verify expected resource exist:**
+
+```
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
+kubectl get ResourceQuota,RoleBinding -n tenant-a
+kubectl get ResourceQuota,RoleBinding -n tenant-b
+kubectl get ResourceQuota,RoleBinding -n tenant-c
+
+
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
+kubectl get ResourceQuota,RoleBinding -n tenant-a
+kubectl get ResourceQuota,RoleBinding -n tenant-b
+kubectl get ResourceQuota,RoleBinding -n tenant-c
+```
+
+Should include (non-exclusive):
+- resourcequota/default
+- rolebinding.rbac.authorization.k8s.io/namespace-viewer
+
 ## Cleaning up
 
-**Delete the GKE clusters:**
+Follow the Clean up instructions on the [Setup](../multi-cluster-acm-setup/) tutorial to delete the clusters, network, and project.
 
-```
-gcloud container clusters delete cluster-west --region us-west1
-gcloud container clusters delete cluster-east --region us-east1
-```
+## Next steps
+
+To learn how to manage tenant resources across clusters, follow the [Multi-Cluster Ingress](../multi-cluster-ingress/) tutorial.
