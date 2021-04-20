@@ -1,6 +1,6 @@
-# Multi-Cluster Quota and Access
+# Multi-Cluster Access and Quota
 
-This example shows how to manage Namespaces, ResourcQuotas, and RoleBindings across multiple clusters using Anthos Config Management, GitOps, and Kustomize.
+This example shows how to manage Namespaces, RoleBindings, and ResourcQuotas across multiple clusters using Anthos Config Management, GitOps, and Kustomize.
 
 ## Quota defaults
 
