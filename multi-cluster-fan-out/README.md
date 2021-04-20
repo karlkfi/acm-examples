@@ -51,15 +51,34 @@ This example installs ConfigSync on two clusters and configures them both to pul
 
 ## Before you begin
 
-1. Create or select a project.
-2. Make sure that billing is enabled for your Cloud project. [Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
+**Create or select a project:**
+
+```
+PLATFORM_PROJECT_ID="example-platform-1234"
+ORGANIZATION_ID="123456789012"
+
+gcloud projects create "${PLATFORM_PROJECT_ID}" \
+    --organization ${ORGANIZATION_ID}
+```
+
+**Enable billing for your project:**
+
+[Learn how to confirm that billing is enabled for your project](https://cloud.google.com/billing/docs/how-to/modify-project).
+
+To link a project to a Cloud Billing account, you need `resourcemanager.projects.createBillingAssignment` on the project (included in `owner`, which you get if you created the project) AND `billing.resourceAssociations.create` on the Cloud Billing account.
+
+```
+BILLING_ACCOUNT_ID="AAAAAA-BBBBBB-CCCCCC"
+
+gcloud alpha billing projects link "${PLATFORM_PROJECT_ID}" \
+    --billing-account ${BILLING_ACCOUNT_ID}
+```
 
 ## Setting up your environment
 
 **Configure your default Google Cloud project ID:**
 
 ```
-PLATFORM_PROJECT_ID="PROJECT_ID"
 gcloud config set project ${PLATFORM_PROJECT_ID}
 ```
 
@@ -80,6 +99,7 @@ If you have the `compute.skipDefaultNetworkCreation` [organization policy constr
 
 ```
 NETWORK="default"
+
 gcloud compute networks create ${NETWORK}
 ```
 
@@ -142,17 +162,6 @@ gcloud container clusters get-credentials cluster-east --region us-east1
 
 # set alias for easy context switching
 CLUSTER_EAST_CONTEXT=$(kubectl config current-context)
-```
-
-**Register the clusters with Hub:**
-
-```
-gcloud container hub memberships register cluster-west \
-    --gke-cluster us-west1/cluster-west \
-    --enable-workload-identity
-gcloud container hub memberships register cluster-east \
-    --gke-cluster us-east1/cluster-east \
-    --enable-workload-identity
 ```
 
 **Deploy Anthos Config Management:**
@@ -235,30 +244,53 @@ EOF
 
 ## Validating success
 
+**Lookup latest commit SHA:**
+
+```
+(cd .github/platform/ && git log -1 --oneline)
+```
+
 **Wait for config to be deployed:**
 
 ```
 nomos status
 ```
 
-Should say "SYNCED" for both clusters.
+Should say "SYNCED" for both clusters with the latest commit SHA.
+
+**Verify expected namespaces exist:**
 
 ```
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
+kubectl get ns
+
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
 kubectl get ns
 ```
 
-Should include:
-- config-management-monitoring
-- config-management-system
-- default
-- gke-connect
-- kube-node-lease
-- kube-public
-- kube-system
-- resource-group-system
+Should include (non-exclusive):
 - tenant-a
 - tenant-b
 - tenant-c
+
+**Verify expected resource exist:**
+
+```
+kubectl config use-context ${CLUSTER_EAST_CONTEXT}
+kubectl get ResourceQuota,RoleBinding -n tenant-a
+kubectl get ResourceQuota,RoleBinding -n tenant-b
+kubectl get ResourceQuota,RoleBinding -n tenant-c
+
+
+kubectl config use-context ${CLUSTER_WEST_CONTEXT}
+kubectl get ResourceQuota,RoleBinding -n tenant-a
+kubectl get ResourceQuota,RoleBinding -n tenant-b
+kubectl get ResourceQuota,RoleBinding -n tenant-c
+```
+
+Should include (non-exclusive):
+- resourcequota/default
+- rolebinding.rbac.authorization.k8s.io/namespace-viewer
 
 ## Cleaning up
 
@@ -267,4 +299,16 @@ Should include:
 ```
 gcloud container clusters delete cluster-west --region us-west1
 gcloud container clusters delete cluster-east --region us-east1
+```
+
+**Delete the network:**
+
+```
+gcloud compute networks delete ${NETWORK}
+```
+
+**Delete the project:**
+
+```
+gcloud projects delete "${PLATFORM_PROJECT_ID}"
 ```
